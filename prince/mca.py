@@ -3,26 +3,46 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn import utils
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.exceptions import NotFittedError
 
-from . import ca
-from . import plot
+from prince import CA
+from prince import plot
 
+class MCA(CA):
 
-class MCA(ca.CA):
+    def __init__(self, n_components=2, n_iter=10, copy=True, check_input=True, benzecri=False,
+                 random_state=None, engine='auto'):
+        super().__init__(
+            n_components=n_components,
+            n_iter=n_iter,
+            copy=copy,
+            check_input=check_input,
+            benzecri=benzecri,
+            random_state=random_state,
+            engine=engine
+        )
+        self._ohe = OneHotEncoder(handle_unknown="ignore")
 
-    def fit(self, X, y=None):
+    def _call_ohe(self, X):
+        try:
+            ohe = self._ohe.transform(X)
+        except NotFittedError:
+            ohe = self._ohe.fit_transform(X)
+
+        return ohe.toarray()
+
+    def fit(self, X, y=None, **kwargs):
 
         if self.check_input:
-            utils.check_array(X, dtype=[str, np.number])
+            utils.check_array(X, dtype=[str])
 
         if not isinstance(X, pd.DataFrame):
             X = pd.DataFrame(X)
 
         n_initial_columns = X.shape[1]
 
-        # One-hot encode the data
-        one_hot = pd.get_dummies(X)
-
+        one_hot = self._call_ohe(X)
         # Apply CA to the indicator matrix
         super().fit(one_hot)
 
@@ -35,12 +55,12 @@ class MCA(ca.CA):
     def row_coordinates(self, X):
         if not isinstance(X, pd.DataFrame):
             X = pd.DataFrame(X)
-        return super().row_coordinates(pd.get_dummies(X))
+        return super().row_coordinates(self._call_ohe(X))
 
     def column_coordinates(self, X):
         if not isinstance(X, pd.DataFrame):
             X = pd.DataFrame(X)
-        return super().column_coordinates(pd.get_dummies(X))
+        return super().column_coordinates(self._call_ohe(X))
 
     def transform(self, X):
         """Computes the row principal coordinates of a dataset."""
@@ -129,3 +149,60 @@ class MCA(ca.CA):
         ax.set_ylabel('Component {} ({:.2f}% inertia)'.format(y_component, 100 * ei[y_component]))
 
         return ax
+
+if __name__=="__main__":
+
+
+    X = pd.DataFrame(
+        data=[
+            ['A', 'A', 'A', 2, 5, 7, 6, 3, 6, 7],
+            ['A', 'A', 'A', 4, 4, 4, 2, 4, 4, 3],
+            ['B', 'A', 'B', 5, 2, 1, 1, 7, 1, 1],
+            ['B', 'A', 'B', 7, 2, 1, 2, 2, 2, 2],
+            ['B', 'B', 'B', 3, 5, 6, 5, 2, 6, 6],
+            ['B', 'B', 'A', 3, 5, 4, 5, 1, 7, 5]
+        ],
+        columns=['E1 fruity', 'E1 woody', 'E1 coffee',
+                 'E2 red fruit', 'E2 roasted', 'E2 vanillin', 'E2 woody',
+                 'E3 fruity', 'E3 butter', 'E3 woody'],
+        index=['Wine {}'.format(i + 1) for i in range(6)]
+    )
+
+    Z = pd.DataFrame(
+        data=[
+            ['A', 'B', 'A', 1, 5, 4, 6, 3, 6, 4],
+            ['C', 'A', 'F', 4, 4, 3, 2, 4, 4, 5],
+            ['A', 'B', 'B', 2, 2, 4, 1, 7, 1, 3],
+            ['D', 'B', 'B', 7, 2, 1, 2, 2, 2, 2],
+            ['A', 'A', 'C', 3, 5, 3, 5, 2, 6, 6],
+            ['B', 'C', 'A', 4, 5, 5, 5, 1, 7, 5]
+        ],
+        columns=['E1 fruity', 'E1 woody', 'E1 coffee',
+                 'E2 red fruit', 'E2 roasted', 'E2 vanillin', 'E2 woody',
+                 'E3 fruity', 'E3 butter', 'E3 woody'],
+        index=['Wine {}'.format(i + 1) for i in range(6, 12)]
+    )
+
+    X['Oak type'] = [1, 2, 2, 2, 1, 1]
+    Z['Oak type'] = [1, 1, 2, 1, 2, 1]
+    Y = pd.concat([X, Z])
+
+    X = X.astype(str)
+    Z = Z.astype(str)
+    Y = Y.astype(str)
+
+    mca = MCA(
+        n_components=5,
+        n_iter=2,
+        copy=True,
+        check_input=True,
+        engine='auto',
+        random_state=42
+    )
+
+
+    mca = mca.fit(X)
+    print(X)
+    print(mca.row_coordinates(X))
+    print(Z)
+    print(mca.row_coordinates(Z))

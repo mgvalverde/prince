@@ -43,6 +43,7 @@ class CA(base.BaseEstimator, base.TransformerMixin):
 
         # Compute the correspondence matrix which contains the relative frequencies
         X /= np.sum(X)
+        X[(X == np.inf) | (X == -np.inf)] = 0
 
         # Compute row and column masses
         self.row_masses_ = pd.Series(X.sum(axis=1), index=row_names)
@@ -127,6 +128,7 @@ class CA(base.BaseEstimator, base.TransformerMixin):
         else:
             X = X / X.sum(axis=1)
 
+        X[(X == np.inf)|(X == -np.inf)] = 0
         return pd.DataFrame(
             data=X @ sparse.diags(self.col_masses_.to_numpy() ** -0.5) @ self.V_.T,
             index=row_names

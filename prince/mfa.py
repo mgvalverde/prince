@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn import utils
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.exceptions import NotFittedError
 
 from . import mca
 from . import pca
@@ -28,6 +30,15 @@ class MFA(pca.PCA):
         )
         self.groups = groups
         self.normalize = normalize
+        self._ohe = OneHotEncoder(handle_unknown="ignore")
+
+    def _call_ohe(self, X):
+        try:
+            ohe = self._ohe.transform(X)
+        except NotFittedError:
+            ohe = self._ohe.fit_transform(X)
+
+        return ohe.toarray()
 
     def fit(self, X, y=None):
 
@@ -107,7 +118,7 @@ class MFA(pca.PCA):
 
             # Dummify if there are categorical variable
             if not self.all_nums_[name]:
-                X_partial = pd.get_dummies(X_partial)
+                X_partial = pd.DataFrame(self._call_ohe(X_partial), index=X.index)
 
             X_partials.append(X_partial / self.partial_factor_analysis_[name].s_[0])
 
@@ -169,7 +180,7 @@ class MFA(pca.PCA):
             X_partial = X.loc[:, cols]
 
             if not self.all_nums_[name]:
-                X_partial = pd.get_dummies(X_partial)
+                X_partial = self._call_ohe(X_partial)
 
             Z_partial = X_partial / self.partial_factor_analysis_[name].s_[0]
             coords[name] = len(self.groups) * (Z_partial @ Z_partial.T) @ P
